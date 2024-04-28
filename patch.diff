@@ -1,0 +1,571 @@
+Only in D:\git\angle2: .vscode
+Only in D:\git\angle2/build/__pycache__: vs_toolchain.cpython-311.pyc
+diff -ur "angle2 - Copy/build/config/win/BUILD.gn" "angle2/build/config/win/BUILD.gn"
+--- "angle2 - Copy/build/config/win/BUILD.gn"	2024-03-03 10:59:31.861020000 +0800
++++ "angle2/build/config/win/BUILD.gn"	2024-03-03 15:46:58.170779800 +0800
+@@ -61,6 +61,7 @@
+   }
+ 
+   cflags = [
++    "/Gv",
+     "/Gy",  # Enable function-level linking.
+     "/FS",  # Preserve previous PDB behavior.
+     "/bigobj",  # Some of our files are bigger than the regular limits.
+diff -ur "angle2 - Copy/build/util/LASTCHANGE.committime" "angle2/build/util/LASTCHANGE.committime"
+--- "angle2 - Copy/build/util/LASTCHANGE.committime"	2024-03-03 11:07:57.664857300 +0800
++++ "angle2/build/util/LASTCHANGE.committime"	2024-03-03 23:16:25.772895400 +0800
+@@ -1 +1 @@
+-0
+\ No newline at end of file
++1709478981
+\ No newline at end of file
+diff -ur "angle2 - Copy/BUILD.gn" "angle2/BUILD.gn"
+--- "angle2 - Copy/BUILD.gn"	2024-03-03 10:59:22.952016900 +0800
++++ "angle2/BUILD.gn"	2024-03-03 15:40:16.258780200 +0800
+@@ -1529,6 +1529,19 @@
+   public_deps = [ ":libANGLE" ]
+ }
+ 
++angle_static_library("libANGLE_static") {
++  sources = libangle_static_sources
++  defines = [
++    "ANGLE_STATIC=1",
++    "ANGLE_EXPORT=",
++    "EGLAPI=",
++    "GL_APICALL=",
++    "GL_API="
++  ]
++  complete_static_lib = true
++  public_deps = [ ":libANGLE", "//build/config:shared_library_deps" ]
++}
++
+ angle_shared_library("libGLESv1_CM") {
+   sources = libglesv1_cm_sources
+   output_name = "libGLESv1_CM${angle_libs_suffix}"
+diff -ur "angle2 - Copy/include/platform/PlatformMethods.h" "angle2/include/platform/PlatformMethods.h"
+--- "angle2 - Copy/include/platform/PlatformMethods.h"	2024-03-03 10:59:23.036017500 +0800
++++ "angle2/include/platform/PlatformMethods.h"	2024-03-03 15:40:46.418779100 +0800
+@@ -14,6 +14,7 @@
+ #include <array>
+ 
+ #define EGL_PLATFORM_ANGLE_PLATFORM_METHODS_ANGLEX 0x6AFB
++#define ANGLE_PLATFORM_EXPORT
+ 
+ #if !defined(ANGLE_PLATFORM_EXPORT)
+ #    if defined(_WIN32)
+Only in D:\git\angle2: out
+diff -ur "angle2 - Copy/src/compiler/translator/IntermNode.h" "angle2/src/compiler/translator/IntermNode.h"
+--- "angle2 - Copy/src/compiler/translator/IntermNode.h"	2024-03-03 10:59:23.204018100 +0800
++++ "angle2/src/compiler/translator/IntermNode.h"	2024-03-03 15:41:19.693780000 +0800
+@@ -408,7 +408,7 @@
+     const TConstantUnion *mUnionArrayPointer;
+ 
+   private:
+-    typedef float (*FloatTypeUnaryFunc)(float);
++    typedef float (__cdecl *FloatTypeUnaryFunc)(float);
+     void foldFloatTypeUnary(const TConstantUnion &parameter,
+                             FloatTypeUnaryFunc builtinFunc,
+                             TConstantUnion *result) const;
+diff -ur "angle2 - Copy/src/gpu_info_util/SystemInfo_vulkan.cpp" "angle2/src/gpu_info_util/SystemInfo_vulkan.cpp"
+--- "angle2 - Copy/src/gpu_info_util/SystemInfo_vulkan.cpp"	2024-03-03 10:59:23.339018700 +0800
++++ "angle2/src/gpu_info_util/SystemInfo_vulkan.cpp"	2024-03-03 23:34:31.467986100 +0800
+@@ -366,4 +366,36 @@
+     return true;
+ }
+ 
++uint64_t GetDedicatedDualGPUVulkan()
++{
++    SystemInfo info;
++    bool ok = GetSystemInfoVulkan(&info);
++    if (!ok)
++        return 0;
++
++    bool hasIntel = false;
++    uint64_t dedicatedGpu = 0;
++    for (const auto& gpu : info.gpus)
++    {
++        if (gpu.vendorId == angle::kVendorID_Intel)
++        {
++            hasIntel = true;
++        }
++
++        if (!dedicatedGpu && (gpu.vendorId == angle::kVendorID_NVIDIA || gpu.vendorId == angle::kVendorID_AMD))
++        {
++            dedicatedGpu = gpu.systemDeviceId;
++        }
++    }
++
++    if (hasIntel)
++    {
++        return dedicatedGpu;
++    }
++    else
++    {
++        return 0;
++    }
++}
++
+ }  // namespace angle
+diff -ur "angle2 - Copy/src/gpu_info_util/SystemInfo_win.cpp" "angle2/src/gpu_info_util/SystemInfo_win.cpp"
+--- "angle2 - Copy/src/gpu_info_util/SystemInfo_win.cpp"	2024-03-03 10:59:23.339018700 +0800
++++ "angle2/src/gpu_info_util/SystemInfo_win.cpp"	2024-03-03 23:34:01.691988600 +0800
+@@ -114,4 +114,36 @@
+     return true;
+ }
+ 
++uint64_t GetDedicatedDualGPU()
++{
++    SystemInfo info;
++    bool ok = GetSystemInfo(&info);
++    if (!ok)
++        return 0;
++
++    bool hasIntel = false;
++    uint64_t dedicatedGpu = 0;
++    for (const auto& gpu : info.gpus)
++    {
++        if (gpu.vendorId == angle::kVendorID_Intel)
++        {
++            hasIntel = true;
++        }
++
++        if (!dedicatedGpu && (gpu.vendorId == angle::kVendorID_NVIDIA || gpu.vendorId == angle::kVendorID_AMD))
++        {
++            dedicatedGpu = gpu.systemDeviceId;
++        }
++    }
++
++    if (hasIntel)
++    {
++        return dedicatedGpu;
++    }
++    else
++    {
++        return 0;
++    }
++}
++
+ }  // namespace angle
+diff -ur "angle2 - Copy/src/libEGL/egl_loader_autogen.h" "angle2/src/libEGL/egl_loader_autogen.h"
+--- "angle2 - Copy/src/libEGL/egl_loader_autogen.h"	2024-03-03 10:59:23.871018900 +0800
++++ "angle2/src/libEGL/egl_loader_autogen.h"	2024-03-03 15:43:01.066779300 +0800
+@@ -255,7 +255,7 @@
+ 
+ typedef void (*GenericProc)(void);
+ typedef GenericProc(KHRONOS_APIENTRY *LoadProc)(const char *);
+-ANGLE_NO_EXPORT void LoadLibEGL_EGL(LoadProc loadProc);
++ANGLE_NO_EXPORT void __cdecl LoadLibEGL_EGL(LoadProc loadProc);
+ 
+ #if defined(__cplusplus)
+ }       // extern "C"
+diff -ur "angle2 - Copy/src/libEGL/libEGL_autogen.cpp" "angle2/src/libEGL/libEGL_autogen.cpp"
+--- "angle2 - Copy/src/libEGL/libEGL_autogen.cpp"	2024-03-03 10:59:23.872017700 +0800
++++ "angle2/src/libEGL/libEGL_autogen.cpp"	2024-03-03 15:43:13.201781400 +0800
+@@ -51,7 +51,7 @@
+     }
+ }
+ #else
+-void EnsureEGLLoaded() {}
++static inline void EnsureEGLLoaded() {}
+ #endif  // defined(ANGLE_USE_EGL_LOADER)
+ }  // anonymous namespace
+ 
+diff -ur "angle2 - Copy/src/libGLESv2/global_state.cpp" "angle2/src/libGLESv2/global_state.cpp"
+--- "angle2 - Copy/src/libGLESv2/global_state.cpp"	2024-03-03 10:59:23.902017300 +0800
++++ "angle2/src/libGLESv2/global_state.cpp"	2024-03-03 23:27:44.224916700 +0800
+@@ -199,13 +199,9 @@
+ }
+ }  // namespace gl
+ 
+-#if defined(ANGLE_PLATFORM_WINDOWS) && !defined(ANGLE_STATIC)
+ namespace egl
+ {
+ 
+-namespace
+-{
+-
+ void DeallocateCurrentThread()
+ {
+     SafeDelete(gCurrentThread);
+@@ -214,21 +210,20 @@
+ bool InitializeProcess()
+ {
+     EnsureDebugAllocated();
+-    AllocateGlobalMutex();
++    // AllocateGlobalMutex();
+     return AllocateCurrentThread() != nullptr;
+ }
+ 
+ void TerminateProcess()
+ {
+     DeallocateDebug();
+-    DeallocateGlobalMutex();
++    // DeallocateGlobalMutex();
+     DeallocateCurrentThread();
+ }
+ 
+-}  // anonymous namespace
+-
+ }  // namespace egl
+ 
++#if defined(ANGLE_PLATFORM_WINDOWS) && !defined(ANGLE_STATIC)
+ namespace
+ {
+ // The following WaitForDebugger code is based on SwiftShader. See:
+@@ -277,10 +272,11 @@
+     ::DialogBoxIndirectA(instance, dialogTemplate, NULL, DebuggerWaitDialogProc);
+ }
+ #    else
+-void WaitForDebugger(HINSTANCE instance) {}
++// void WaitForDebugger(HINSTANCE instance) {}
+ #    endif  // defined(ANGLE_ENABLE_ASSERTS) && !defined(ANGLE_ENABLE_WINDOWS_UWP)
+ }  // namespace
+ 
++#if 0
+ extern "C" BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID)
+ {
+     switch (reason)
+@@ -306,4 +302,6 @@
+ 
+     return TRUE;
+ }
++#endif
++
+ #endif  // defined(ANGLE_PLATFORM_WINDOWS) && !defined(ANGLE_STATIC)
+diff -ur "angle2 - Copy/src/libGLESv2.gni" "angle2/src/libGLESv2.gni"
+--- "angle2 - Copy/src/libGLESv2.gni"	2024-03-03 10:59:23.875017600 +0800
++++ "angle2/src/libGLESv2.gni"	2024-03-03 15:43:43.124784200 +0800
+@@ -700,3 +700,51 @@
+   "src/libGLESv2/entry_points_egl_autogen.h",
+   "src/libGLESv2/entry_points_egl_ext_autogen.h",
+ ]
++
++libangle_static_sources = [
++  "src/libEGL/egl_loader_autogen.h",
++  "src/libEGL/libEGL_autogen.cpp",
++  "src/libEGL/resource.h",
++  "src/libGLESv2/entry_points_egl_autogen.h",
++  "src/libGLESv2/entry_points_egl_ext_autogen.h",
++  "src/libGLESv2/proc_table_egl_autogen.cpp",
++  
++  "src/libANGLE/Context_gl.cpp",
++  "src/libANGLE/context_private_call_gl.cpp",
++  "src/libANGLE/validationGL1.cpp",
++  "src/libANGLE/validationGL2.cpp",
++  "src/libANGLE/validationGL3.cpp",
++  "src/libANGLE/validationGL4.cpp",
++
++  "src/libGLESv2/egl_ext_stubs.cpp",
++  "src/libGLESv2/egl_ext_stubs_autogen.h",
++  "src/libGLESv2/egl_stubs.cpp",
++  "src/libGLESv2/egl_stubs_autogen.h",
++  "src/libGLESv2/entry_points_egl_autogen.cpp",
++  "src/libGLESv2/entry_points_egl_autogen.h",
++  "src/libGLESv2/entry_points_egl_ext_autogen.cpp",
++  "src/libGLESv2/entry_points_egl_ext_autogen.h",
++  "src/libGLESv2/entry_points_gles_1_0_autogen.cpp",
++  "src/libGLESv2/entry_points_gles_1_0_autogen.h",
++  "src/libGLESv2/entry_points_gles_2_0_autogen.cpp",
++  "src/libGLESv2/entry_points_gles_2_0_autogen.h",
++  "src/libGLESv2/entry_points_gles_3_0_autogen.cpp",
++  "src/libGLESv2/entry_points_gles_3_0_autogen.h",
++  "src/libGLESv2/entry_points_gles_3_1_autogen.cpp",
++  "src/libGLESv2/entry_points_gles_3_1_autogen.h",
++  "src/libGLESv2/entry_points_gles_3_2_autogen.cpp",
++  "src/libGLESv2/entry_points_gles_3_2_autogen.h",
++  "src/libGLESv2/entry_points_gles_ext_autogen.cpp",
++  "src/libGLESv2/entry_points_gles_ext_autogen.h",
++  "src/libGLESv2/entry_points_gl_1_autogen.cpp",
++  "src/libGLESv2/entry_points_gl_1_autogen.h",
++  "src/libGLESv2/entry_points_gl_2_autogen.cpp",
++  "src/libGLESv2/entry_points_gl_2_autogen.h",
++  "src/libGLESv2/entry_points_gl_3_autogen.cpp",
++  "src/libGLESv2/entry_points_gl_3_autogen.h",
++  "src/libGLESv2/entry_points_gl_4_autogen.cpp",
++  "src/libGLESv2/entry_points_gl_4_autogen.h",
++  "src/libGLESv2/global_state.cpp",
++  "src/libGLESv2/global_state.h",
++  "src/libGLESv2/resource.h",
++]
+diff -ur "angle2 - Copy/third_party/abseil-cpp/absl/debugging/failure_signal_handler.cc" "angle2/third_party/abseil-cpp/absl/debugging/failure_signal_handler.cc"
+--- "angle2 - Copy/third_party/abseil-cpp/absl/debugging/failure_signal_handler.cc"	2024-03-03 10:59:31.556020200 +0800
++++ "angle2/third_party/abseil-cpp/absl/debugging/failure_signal_handler.cc"	2024-03-03 23:00:43.295323800 +0800
+@@ -86,7 +86,7 @@
+   using StructSigaction = struct sigaction;
+ #define FSD_PREVIOUS_INIT FailureSignalData::StructSigaction()
+ #else
+-  void (*previous_handler)(int);
++  void (*__cdecl previous_handler)(int);
+ #define FSD_PREVIOUS_INIT SIG_DFL
+ #endif
+ };
+@@ -229,7 +229,7 @@
+ #else
+ 
+ static void InstallOneFailureHandler(FailureSignalData* data,
+-                                     void (*handler)(int)) {
++                                     void (__cdecl *handler)(int)) {
+   data->previous_handler = signal(data->signo, handler);
+   ABSL_RAW_CHECK(data->previous_handler != SIG_ERR, "signal() failed");
+ }
+@@ -331,10 +331,10 @@
+ ABSL_CONST_INIT static std::atomic<GetTidType> failed_tid(0);
+ 
+ #ifndef ABSL_HAVE_SIGACTION
+-static void AbslFailureSignalHandler(int signo) {
++static __cdecl void AbslFailureSignalHandler(int signo) {
+   void* ucontext = nullptr;
+ #else
+-static void AbslFailureSignalHandler(int signo, siginfo_t*, void* ucontext) {
++static __cdecl void AbslFailureSignalHandler(int signo, siginfo_t*, void* ucontext) {
+ #endif
+ 
+   const GetTidType this_tid = absl::base_internal::GetTID();
+diff -ur "angle2 - Copy/third_party/abseil-cpp/absl/time/internal/cctz/src/time_zone_info.cc" "angle2/third_party/abseil-cpp/absl/time/internal/cctz/src/time_zone_info.cc"
+--- "angle2 - Copy/third_party/abseil-cpp/absl/time/internal/cctz/src/time_zone_info.cc"	2024-03-03 10:59:31.873019700 +0800
++++ "angle2/third_party/abseil-cpp/absl/time/internal/cctz/src/time_zone_info.cc"	2024-03-03 23:03:29.605348900 +0800
+@@ -380,7 +380,7 @@
+ 
+ namespace {
+ 
+-using FilePtr = std::unique_ptr<FILE, int (*)(FILE*)>;
++using FilePtr = std::unique_ptr<FILE, int (__cdecl *)(FILE*)>;
+ 
+ // fopen(3) adaptor.
+ inline FilePtr FOpen(const char* path, const char* mode) {
+diff -ur "angle2 - Copy/third_party/libc++/src/include/__exception/operations.h" "angle2/third_party/libc++/src/include/__exception/operations.h"
+--- "angle2 - Copy/third_party/libc++/src/include/__exception/operations.h"	2024-03-03 11:00:02.001486700 +0800
++++ "angle2/third_party/libc++/src/include/__exception/operations.h"	2024-03-03 22:52:47.430728500 +0800
+@@ -20,13 +20,13 @@
+ namespace std { // purposefully not using versioning namespace
+ #if _LIBCPP_STD_VER <= 14 || defined(_LIBCPP_ENABLE_CXX17_REMOVED_UNEXPECTED_FUNCTIONS) ||                             \
+     defined(_LIBCPP_BUILDING_LIBRARY)
+-using unexpected_handler = void (*)();
++using unexpected_handler = void (__cdecl *)();
+ _LIBCPP_EXPORTED_FROM_ABI unexpected_handler set_unexpected(unexpected_handler) _NOEXCEPT;
+ _LIBCPP_EXPORTED_FROM_ABI unexpected_handler get_unexpected() _NOEXCEPT;
+ _LIBCPP_NORETURN _LIBCPP_EXPORTED_FROM_ABI void unexpected();
+ #endif
+ 
+-using terminate_handler = void (*)();
++using terminate_handler = void (__cdecl *)();
+ _LIBCPP_EXPORTED_FROM_ABI terminate_handler set_terminate(terminate_handler) _NOEXCEPT;
+ _LIBCPP_EXPORTED_FROM_ABI terminate_handler get_terminate() _NOEXCEPT;
+ 
+diff -ur "angle2 - Copy/third_party/libc++/src/include/fstream" "angle2/third_party/libc++/src/include/fstream"
+--- "angle2 - Copy/third_party/libc++/src/include/fstream"	2024-03-03 11:00:02.633486400 +0800
++++ "angle2/third_party/libc++/src/include/fstream"	2024-03-03 22:22:47.313194000 +0800
+@@ -696,7 +696,7 @@
+   basic_filebuf<_CharT, _Traits>* __rt = nullptr;
+   if (__file_) {
+     __rt = this;
+-    unique_ptr<FILE, int (*)(FILE*)> __h(__file_, fclose);
++    unique_ptr<FILE, int (__cdecl *)(FILE*)> __h(__file_, fclose);
+     if (sync())
+       __rt = nullptr;
+     if (fclose(__h.release()))
+diff -ur "angle2 - Copy/third_party/libc++/src/include/locale" "angle2/third_party/libc++/src/include/locale"
+--- "angle2 - Copy/third_party/libc++/src/include/locale"	2024-03-03 11:00:02.661487500 +0800
++++ "angle2/third_party/libc++/src/include/locale"	2024-03-03 22:31:57.910372300 +0800
+@@ -283,7 +283,7 @@
+   const unsigned char __does_match   = '\2';
+   unsigned char __statbuf[100];
+   unsigned char* __status = __statbuf;
+-  unique_ptr<unsigned char, void (*)(void*)> __stat_hold(nullptr, free);
++  unique_ptr<unsigned char, void (__cdecl *)(void*)> __stat_hold(nullptr, free);
+   if (__nkw > sizeof(__statbuf)) {
+     __status = (unsigned char*)malloc(__nkw);
+     if (__status == nullptr)
+@@ -1364,7 +1364,7 @@
+     __nc = __libcpp_snprintf_l(__nb, __nbuf, _LIBCPP_GET_C_LOCALE, __fmt, (int)__iob.precision(), __v);
+   else
+     __nc = __libcpp_snprintf_l(__nb, __nbuf, _LIBCPP_GET_C_LOCALE, __fmt, __v);
+-  unique_ptr<char, void (*)(void*)> __nbh(nullptr, free);
++  unique_ptr<char, void (__cdecl *)(void*)> __nbh(nullptr, free);
+   if (__nc > static_cast<int>(__nbuf - 1)) {
+     if (__specify_precision)
+       __nc = __libcpp_asprintf_l(&__nb, _LIBCPP_GET_C_LOCALE, __fmt, (int)__iob.precision(), __v);
+@@ -1380,7 +1380,7 @@
+   // Stage 2 - Widen __nar while adding thousands separators
+   char_type __o[2 * (__nbuf - 1) - 1];
+   char_type* __ob = __o;
+-  unique_ptr<char_type, void (*)(void*)> __obh(0, free);
++  unique_ptr<char_type, void (__cdecl *)(void*)> __obh(0, free);
+   if (__nb != __nar) {
+     __ob = (char_type*)malloc(2 * static_cast<size_t>(__nc) * sizeof(char_type));
+     if (__ob == 0)
+@@ -2408,7 +2408,7 @@
+       ios_base::iostate& __err,
+       bool& __neg,
+       const ctype<char_type>& __ct,
+-      unique_ptr<char_type, void (*)(void*)>& __wb,
++      unique_ptr<char_type, void (__cdecl *)(void*)>& __wb,
+       char_type*& __wn,
+       char_type* __we);
+ };
+@@ -2416,10 +2416,10 @@
+ template <class _CharT, class _InputIterator>
+ locale::id money_get<_CharT, _InputIterator>::id;
+ 
+-_LIBCPP_EXPORTED_FROM_ABI void __do_nothing(void*);
++_LIBCPP_EXPORTED_FROM_ABI __cdecl void __do_nothing(void*);
+ 
+ template <class _Tp>
+-_LIBCPP_HIDE_FROM_ABI void __double_or_nothing(unique_ptr<_Tp, void (*)(void*)>& __b, _Tp*& __n, _Tp*& __e) {
++_LIBCPP_HIDE_FROM_ABI void __double_or_nothing(unique_ptr<_Tp, void (__cdecl *)(void*)>& __b, _Tp*& __n, _Tp*& __e) {
+   bool __owns      = __b.get_deleter() != __do_nothing;
+   size_t __cur_cap = static_cast<size_t>(__e - __b.get()) * sizeof(_Tp);
+   size_t __new_cap = __cur_cap < numeric_limits<size_t>::max() / 2 ? 2 * __cur_cap : numeric_limits<size_t>::max();
+@@ -2431,7 +2431,7 @@
+     __throw_bad_alloc();
+   if (__owns)
+     __b.release();
+-  __b = unique_ptr<_Tp, void (*)(void*)>(__t, free);
++  __b = unique_ptr<_Tp, void (__cdecl *)(void*)>(__t, free);
+   __new_cap /= sizeof(_Tp);
+   __n = __b.get() + __n_off;
+   __e = __b.get() + __new_cap;
+@@ -2448,7 +2448,7 @@
+     ios_base::iostate& __err,
+     bool& __neg,
+     const ctype<char_type>& __ct,
+-    unique_ptr<char_type, void (*)(void*)>& __wb,
++    unique_ptr<char_type, void (__cdecl *)(void*)>& __wb,
+     char_type*& __wn,
+     char_type* __we) {
+   if (__b == __e) {
+@@ -2457,7 +2457,7 @@
+   }
+   const unsigned __bz = 100;
+   unsigned __gbuf[__bz];
+-  unique_ptr<unsigned, void (*)(void*)> __gb(__gbuf, __do_nothing);
++  unique_ptr<unsigned, void (__cdecl *)(void*)> __gb(__gbuf, __do_nothing);
+   unsigned* __gn = __gb.get();
+   unsigned* __ge = __gn + __bz;
+   money_base::pattern __pat;
+@@ -2615,7 +2615,7 @@
+     iter_type __b, iter_type __e, bool __intl, ios_base& __iob, ios_base::iostate& __err, long double& __v) const {
+   const int __bz = 100;
+   char_type __wbuf[__bz];
+-  unique_ptr<char_type, void (*)(void*)> __wb(__wbuf, __do_nothing);
++  unique_ptr<char_type, void (__cdecl *)(void*)> __wb(__wbuf, __do_nothing);
+   char_type* __wn;
+   char_type* __we              = __wbuf + __bz;
+   locale __loc                 = __iob.getloc();
+@@ -2627,7 +2627,7 @@
+     __ct.widen(__src, __src + (sizeof(__src) - 1), __atoms);
+     char __nbuf[__bz];
+     char* __nc = __nbuf;
+-    unique_ptr<char, void (*)(void*)> __h(nullptr, free);
++    unique_ptr<char, void (__cdecl *)(void*)> __h(nullptr, free);
+     if (__wn - __wb.get() > __bz - 2) {
+       __h.reset((char*)malloc(static_cast<size_t>(__wn - __wb.get() + 2)));
+       if (__h.get() == nullptr)
+@@ -2652,7 +2652,7 @@
+     iter_type __b, iter_type __e, bool __intl, ios_base& __iob, ios_base::iostate& __err, string_type& __v) const {
+   const int __bz = 100;
+   char_type __wbuf[__bz];
+-  unique_ptr<char_type, void (*)(void*)> __wb(__wbuf, __do_nothing);
++  unique_ptr<char_type, void (__cdecl *)(void*)> __wb(__wbuf, __do_nothing);
+   char_type* __wn;
+   char_type* __we              = __wbuf + __bz;
+   locale __loc                 = __iob.getloc();
+@@ -2899,8 +2899,8 @@
+   char_type __digits[__bs];
+   char_type* __db = __digits;
+   int __n         = snprintf(__bb, __bs, "%.0Lf", __units);
+-  unique_ptr<char, void (*)(void*)> __hn(nullptr, free);
+-  unique_ptr<char_type, void (*)(void*)> __hd(0, free);
++  unique_ptr<char, void (__cdecl *)(void*)> __hn(nullptr, free);
++  unique_ptr<char_type, void (__cdecl *)(void*)> __hd(0, free);
+   // secure memory for digit storage
+   if (static_cast<size_t>(__n) > __bs - 1) {
+     __n = __libcpp_asprintf_l(&__bb, _LIBCPP_GET_C_LOCALE, "%.0Lf", __units);
+@@ -2928,7 +2928,7 @@
+   // secure memory for formatting
+   char_type __mbuf[__bs];
+   char_type* __mb = __mbuf;
+-  unique_ptr<char_type, void (*)(void*)> __hw(0, free);
++  unique_ptr<char_type, void (__cdecl *)(void*)> __hw(0, free);
+   size_t __exn = __n > __fd ? (static_cast<size_t>(__n) - static_cast<size_t>(__fd)) * 2 + __sn.size() + __sym.size() +
+                                   static_cast<size_t>(__fd) + 1
+                             : __sn.size() + __sym.size() + static_cast<size_t>(__fd) + 2;
+@@ -2964,7 +2964,7 @@
+   // secure memory for formatting
+   char_type __mbuf[100];
+   char_type* __mb = __mbuf;
+-  unique_ptr<char_type, void (*)(void*)> __h(0, free);
++  unique_ptr<char_type, void (__cdecl *)(void*)> __h(0, free);
+   size_t __exn =
+       static_cast<int>(__digits.size()) > __fd
+           ? (__digits.size() - static_cast<size_t>(__fd)) * 2 + __sn.size() + __sym.size() + static_cast<size_t>(__fd) +
+diff -ur "angle2 - Copy/third_party/libc++/src/src/ios.cpp" "angle2/third_party/libc++/src/src/ios.cpp"
+--- "angle2 - Copy/third_party/libc++/src/src/ios.cpp"	2024-03-03 11:00:02.915486900 +0800
++++ "angle2/third_party/libc++/src/src/ios.cpp"	2024-03-03 22:56:03.573320600 +0800
+@@ -241,10 +241,10 @@
+ void ios_base::copyfmt(const ios_base& rhs) {
+   // If we can't acquire the needed resources, throw bad_alloc (can't set badbit)
+   // Don't alter *this until all needed resources are acquired
+-  unique_ptr<event_callback, void (*)(void*)> new_callbacks(0, free);
+-  unique_ptr<int, void (*)(void*)> new_ints(0, free);
+-  unique_ptr<long, void (*)(void*)> new_longs(0, free);
+-  unique_ptr<void*, void (*)(void*)> new_pointers(0, free);
++  unique_ptr<event_callback, void (__cdecl *)(void*)> new_callbacks(0, free);
++  unique_ptr<int, void (__cdecl *)(void*)> new_ints(0, free);
++  unique_ptr<long, void (__cdecl *)(void*)> new_longs(0, free);
++  unique_ptr<void*, void (__cdecl *)(void*)> new_pointers(0, free);
+   if (__event_cap_ < rhs.__event_size_) {
+     size_t newesize = sizeof(event_callback) * rhs.__event_size_;
+     new_callbacks.reset(static_cast<event_callback*>(malloc(newesize)));
+diff -ur "angle2 - Copy/third_party/vulkan-deps/vulkan-loader/src/loader/loader_environment.c" "angle2/third_party/vulkan-deps/vulkan-loader/src/loader/loader_environment.c"
+--- "angle2 - Copy/third_party/vulkan-deps/vulkan-loader/src/loader/loader_environment.c"	2024-03-03 11:00:47.403484800 +0800
++++ "angle2/third_party/vulkan-deps/vulkan-loader/src/loader/loader_environment.c"	2024-03-03 23:24:36.070672300 +0800
+@@ -37,7 +37,7 @@
+ // Environment variables
+ #if COMMON_UNIX_PLATFORMS
+ 
+-bool is_high_integrity() { return geteuid() != getuid() || getegid() != getgid(); }
++bool is_high_integrity(void) { return geteuid() != getuid() || getegid() != getgid(); }
+ 
+ char *loader_getenv(const char *name, const struct loader_instance *inst) {
+     if (NULL == name) return NULL;
+@@ -87,7 +87,7 @@
+ 
+ #elif defined(WIN32)
+ 
+-bool is_high_integrity() {
++bool is_high_integrity(void) {
+     HANDLE process_token;
+     if (OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY | TOKEN_QUERY_SOURCE, &process_token)) {
+         // Maximum possible size of SID_AND_ATTRIBUTES is maximum size of a SID + size of attributes DWORD.
+diff -ur "angle2 - Copy/third_party/vulkan-deps/vulkan-loader/src/loader/loader_environment.h" "angle2/third_party/vulkan-deps/vulkan-loader/src/loader/loader_environment.h"
+--- "angle2 - Copy/third_party/vulkan-deps/vulkan-loader/src/loader/loader_environment.h"	2024-03-03 11:00:47.403484800 +0800
++++ "angle2/third_party/vulkan-deps/vulkan-loader/src/loader/loader_environment.h"	2024-03-03 23:24:21.448672400 +0800
+@@ -37,7 +37,7 @@
+ 
+ #if defined(WIN32) || COMMON_UNIX_PLATFORMS
+ 
+-bool is_high_integrity();
++bool is_high_integrity(void);
+ 
+ char *loader_secure_getenv(const char *name, const struct loader_instance *inst);
+ 
+diff -ur "angle2 - Copy/third_party/vulkan-deps/vulkan-loader/src/loader/loader_windows.c" "angle2/third_party/vulkan-deps/vulkan-loader/src/loader/loader_windows.c"
+--- "angle2 - Copy/third_party/vulkan-deps/vulkan-loader/src/loader/loader_windows.c"	2024-03-03 11:00:47.406485900 +0800
++++ "angle2/third_party/vulkan-deps/vulkan-loader/src/loader/loader_windows.c"	2024-03-03 23:27:01.908920800 +0800
+@@ -97,6 +97,7 @@
+ #endif
+ }
+ 
++#if 0
+ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD reason, LPVOID reserved) {
+     (void)hinst;
+     switch (reason) {
+@@ -114,6 +115,7 @@
+     }
+     return TRUE;
+ }
++#endif
+ 
+ bool windows_add_json_entry(const struct loader_instance *inst,
+                             char **reg_data,    // list of JSON files
