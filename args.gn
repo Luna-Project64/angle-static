@@ -13,5 +13,6 @@ angle_enable_essl = true
 angle_enable_glsl = true
 angle_enable_hlsl = true
 angle_enable_swiftshader = false
+angle_enable_wgpu = false
 angle_shared_libvulkan = false
 angle_build_tests = false
